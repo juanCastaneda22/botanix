@@ -7,6 +7,8 @@ import botanix.botanix.repository.PasswordResetTokenRepository;
 import botanix.botanix.service.EmailService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Controller;
@@ -21,6 +23,8 @@ import java.util.UUID;
 
 @Controller
 public class UsuarioView {
+
+    private static final Logger log = LoggerFactory.getLogger(UsuarioView.class);
 
     @Autowired
     private UsuarioRepository usuarioRepository;
@@ -151,8 +155,14 @@ public class UsuarioView {
         String appUrl = request.getScheme() + "://" + request.getServerName() + ":" + request.getServerPort() + request.getContextPath();
         String enlace = appUrl + "/nueva-password?token=" + token;
 
-        // Enviar el correo
-        emailService.enviarCorreoRecuperacion(correoNormalizado, enlace);
+        try {
+            emailService.enviarCorreoRecuperacion(correoNormalizado, enlace);
+        } catch (Exception e) {
+            tokenRepository.delete(resetToken);
+            log.error("Error al enviar el correo de recuperación a {}", correoNormalizado, e);
+            ra.addFlashAttribute("error", "No se pudo enviar el correo de recuperación. Inténtalo nuevamente.");
+            return "redirect:/recuperar-password";
+        }
 
         ra.addFlashAttribute("success", "Hemos enviado un correo para restablecer tu contraseña. Por favor, revisa tu bandeja de entrada.");
         return "redirect:/recuperar-password";
