@@ -26,18 +26,26 @@ public class EmailService {
     @Value("${spring.mail.username}")
     private String remitente;
 
+    @Value("${spring.mail.password}")
+    private String password;
+
     public EmailService(JavaMailSender mailSender) {
         this.mailSender = mailSender;
     }
 
     @PostConstruct
     public void verificarConfiguracion() {
-        log.info("EmailService iniciado. SMTP {}:{} remitente={}",
+        boolean passOk = password != null && !password.isBlank();
+        log.info("EmailService iniciado. SMTP {}:{} remitente={} password={}",
                 host == null ? "?" : host,
                 port == null ? "?" : port,
-                remitente == null || remitente.isBlank() ? "(no configurado)" : remitente);
+                remitente == null || remitente.isBlank() ? "(no configurado)" : remitente,
+                passOk ? "(configurada)" : "(VACIA)");
         if (remitente == null || remitente.isBlank()) {
             log.warn("spring.mail.username no esta configurado: el envio de correos fallara.");
+        }
+        if (!passOk) {
+            log.warn("spring.mail.password no esta configurado (variable MAIL_PASSWORD): la autenticacion fallara.");
         }
     }
 
