@@ -16,7 +16,7 @@ public class EmailService {
 
     private static final Logger log = LoggerFactory.getLogger(EmailService.class);
 
-    private final RestClient restClient;
+    private final RestClient restClient = RestClient.create();
 
     @Value("${mail.api.url}")
     private String apiUrl;
@@ -29,10 +29,6 @@ public class EmailService {
 
     @Value("${mail.from.name}")
     private String remitenteNombre;
-
-    public EmailService(RestClient.Builder restClientBuilder) {
-        this.restClient = restClientBuilder.build();
-    }
 
     @PostConstruct
     public void verificarConfiguracion() {
