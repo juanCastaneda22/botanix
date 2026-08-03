@@ -1,65 +1,71 @@
 package botanix.botanix.service;
 
 import jakarta.annotation.PostConstruct;
-import jakarta.mail.MessagingException;
-import jakarta.mail.internet.MimeMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClient;
+
+import java.util.List;
+import java.util.Map;
 
 @Service
 public class EmailService {
 
     private static final Logger log = LoggerFactory.getLogger(EmailService.class);
 
-    private final JavaMailSender mailSender;
+    private final RestClient restClient;
 
-    @Value("${spring.mail.host}")
-    private String host;
+    @Value("${mail.api.url}")
+    private String apiUrl;
 
-    @Value("${spring.mail.port}")
-    private String port;
+    @Value("${mail.api.key}")
+    private String apiKey;
 
-    @Value("${spring.mail.username}")
+    @Value("${mail.from}")
     private String remitente;
 
-    @Value("${spring.mail.password}")
-    private String password;
+    @Value("${mail.from.name}")
+    private String remitenteNombre;
 
-    public EmailService(JavaMailSender mailSender) {
-        this.mailSender = mailSender;
+    public EmailService(RestClient.Builder restClientBuilder) {
+        this.restClient = restClientBuilder.build();
     }
 
     @PostConstruct
     public void verificarConfiguracion() {
-        boolean passOk = password != null && !password.isBlank();
-        log.info("EmailService iniciado. SMTP {}:{} remitente={} password={}",
-                host == null ? "?" : host,
-                port == null ? "?" : port,
+        boolean keyOk = apiKey != null && !apiKey.isBlank();
+        log.info("EmailService (Brevo) iniciado. remitente={} apiKey={}",
                 remitente == null || remitente.isBlank() ? "(no configurado)" : remitente,
-                passOk ? "(configurada)" : "(VACIA)");
-        if (remitente == null || remitente.isBlank()) {
-            log.warn("spring.mail.username no esta configurado: el envio de correos fallara.");
-        }
-        if (!passOk) {
-            log.warn("spring.mail.password no esta configurado (variable MAIL_PASSWORD): la autenticacion fallara.");
+                keyOk ? "(configurada)" : "(VACIA)");
+        if (!keyOk) {
+            log.warn("MAIL_API_KEY no esta configurada: el envio de correos fallara.");
         }
     }
 
-    public void enviarCorreoRecuperacion(String destinatario, String enlace) throws MessagingException {
-        MimeMessage message = mailSender.createMimeMessage();
-        MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+    public void enviarCorreoRecuperacion(String destinatario, String enlace) throws Exception {
+        if (apiKey == null || apiKey.isBlank()) {
+            throw new IllegalStateException("MAIL_API_KEY no esta configurada.");
+        }
 
-        helper.setFrom(remitente);
-        helper.setTo(destinatario);
-        helper.setSubject("Restablecer tu contraseña - Botanix");
-        helper.setText(construirContenidoRecuperacion(enlace), true);
+        Map<String, Object> cuerpo = Map.of(
+                "sender", Map.of("email", remitente, "name", remitenteNombre),
+                "to", List.of(Map.of("email", destinatario)),
+                "subject", "Restablecer tu contraseña - Botanix",
+                "htmlContent", construirContenidoRecuperacion(enlace)
+        );
 
-        mailSender.send(message);
-        log.info("Correo de recuperación enviado a {}. MessageId={}", destinatario, message.getMessageID());
+        String respuesta = restClient.post()
+                .uri(apiUrl)
+                .header("api-key", apiKey)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(cuerpo)
+                .retrieve()
+                .body(String.class);
+
+        log.info("Correo de recuperación enviado a {}. Respuesta de Brevo: {}", destinatario, respuesta);
     }
 
     private String construirContenidoRecuperacion(String enlace) {
